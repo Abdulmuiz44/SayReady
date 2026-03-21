@@ -1,7 +1,7 @@
 export type AppConfig = {
   supabaseUrl: string;
   supabaseServiceRoleKey: string;
-  openAiApiKey: string;
+  mistralApiKey: string;
   transcriptionModel: string;
   evaluationModel: string;
   freeTierDailyEvaluationLimit: number;
@@ -36,9 +36,9 @@ const optionalIntEnv = (name: string, fallback: number): number => {
 export const getConfig = (): AppConfig => ({
   supabaseUrl: requireEnv("SUPABASE_URL"),
   supabaseServiceRoleKey: requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
-  openAiApiKey: requireEnv("OPENAI_API_KEY"),
-  transcriptionModel: optionalEnv("OPENAI_TRANSCRIPTION_MODEL", "gpt-4o-mini-transcribe"),
-  evaluationModel: optionalEnv("OPENAI_EVALUATION_MODEL", "gpt-4.1-mini"),
+  mistralApiKey: requireEnv("MISTRAL_API_KEY"),
+  transcriptionModel: optionalEnv("MISTRAL_TRANSCRIPTION_MODEL", "voxtral-mini-latest"),
+  evaluationModel: optionalEnv("MISTRAL_EVALUATION_MODEL", "mistral-small-latest"),
   freeTierDailyEvaluationLimit: optionalIntEnv("FREE_TIER_DAILY_EVALUATION_LIMIT", 3),
   revenueCatWebhookSecret: optionalEnv("REVENUECAT_WEBHOOK_SECRET", ""),
   appTimeZoneDefault: optionalEnv("APP_DEFAULT_TIMEZONE", "UTC"),
