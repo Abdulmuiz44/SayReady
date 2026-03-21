@@ -1,0 +1,12 @@
+{
+  "name": "sayready",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "lint": "pnpm --filter @sayready/mobile lint",
+    "typecheck": "pnpm --filter @sayready/mobile typecheck",
+    "test": "pnpm --filter @sayready/mobile test",
+    "mobile": "pnpm --filter @sayready/mobile start"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "SayReady Mobile",
+    "slug": "sayready-mobile",
+    "scheme": "sayready",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {},
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
