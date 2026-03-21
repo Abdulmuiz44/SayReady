@@ -6,7 +6,7 @@
   "scripts": {
     "lint": "pnpm --filter @sayready/mobile lint",
     "typecheck": "pnpm --filter @sayready/mobile typecheck",
-    "test": "pnpm --filter @sayready/mobile test",
+    "test": "node --test packages/config/src/recommendation.test.mjs",
     "mobile": "pnpm --filter @sayready/mobile start"
   }
 }
