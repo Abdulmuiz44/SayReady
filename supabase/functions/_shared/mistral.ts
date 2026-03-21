@@ -59,6 +59,8 @@ const buildEvaluationPrompt = (rubric: unknown, transcript: string): string => {
   ].join("\n\n");
 };
 
+const isTimeoutError = (error: unknown): boolean => error instanceof DOMException && error.name === "TimeoutError";
+
 export const transcribeAudio = async (params: {
   apiKey: string;
   model: string;
@@ -73,25 +75,29 @@ export const transcribeAudio = async (params: {
   formData.append("model", params.model);
   formData.append("file", file);
 
-  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`,
-    },
-    body: formData,
-  });
+  let response: Response;
+  try {
+    response = await fetch("https://api.mistral.ai/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${params.apiKey}` },
+      body: formData,
+      signal: AbortSignal.timeout(45_000),
+    });
+  } catch (error) {
+    if (isTimeoutError(error)) {
+      throw new HttpError(504, "transcription_timeout", "Mistral transcription timed out.");
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     const body = await response.text();
-    console.error("OpenAI transcription failure", { status: response.status, body });
+    console.error("Mistral transcription failure", { status: response.status, body });
     throw new HttpError(502, "transcription_failed", "Failed to transcribe session audio.");
   }
 
   const json = await response.json() as { text?: string };
-  if (!json.text?.trim()) {
-    throw new HttpError(502, "transcription_empty", "Received empty transcription output.");
-  }
-
+  if (!json.text?.trim()) throw new HttpError(502, "transcription_empty", "Received empty transcription output.");
   return json.text.trim();
 };
 
@@ -101,62 +107,52 @@ export const evaluateTranscript = async (params: {
   rubric: unknown;
   transcript: string;
 }): Promise<unknown> => {
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: params.model,
-      temperature: 0,
-      input: [
-        {
-          role: "system",
-          content: [
-            {
-              type: "input_text",
-              text: "Return only JSON valid for the requested schema.",
-            },
-          ],
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: buildEvaluationPrompt(params.rubric, params.transcript),
-            },
-          ],
-        },
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: EVALUATION_SCHEMA.name,
-          strict: true,
-          schema: EVALUATION_SCHEMA.schema,
-        },
+  let response: Response;
+  try {
+    response = await fetch("https://api.mistral.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${params.apiKey}`,
+        "Content-Type": "application/json",
       },
-    }),
-  });
+      body: JSON.stringify({
+        model: params.model,
+        temperature: 0,
+        messages: [
+          { role: "system", content: "Return only JSON valid for the requested schema." },
+          { role: "user", content: buildEvaluationPrompt(params.rubric, params.transcript) },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: EVALUATION_SCHEMA.name,
+            strict: true,
+            schema: EVALUATION_SCHEMA.schema,
+          },
+        },
+      }),
+      signal: AbortSignal.timeout(45_000),
+    });
+  } catch (error) {
+    if (isTimeoutError(error)) throw new HttpError(504, "evaluation_timeout", "Mistral evaluation timed out.");
+    throw error;
+  }
 
   if (!response.ok) {
     const body = await response.text();
-    console.error("OpenAI evaluation failure", { status: response.status, body });
+    console.error("Mistral evaluation failure", { status: response.status, body });
     throw new HttpError(502, "evaluation_failed", "Failed to evaluate transcript.");
   }
 
   const json = await response.json() as {
-    output_text?: string;
+    choices?: Array<{ message?: { content?: string } }>
   };
 
-  if (!json.output_text) {
-    throw new HttpError(502, "evaluation_empty", "Model output was empty.");
-  }
+  const content = json.choices?.[0]?.message?.content;
+  if (!content) throw new HttpError(502, "evaluation_empty", "Model output was empty.");
 
   try {
-    return JSON.parse(json.output_text);
+    return JSON.parse(content);
   } catch {
     throw new HttpError(502, "evaluation_malformed", "Model returned malformed JSON output.");
   }
