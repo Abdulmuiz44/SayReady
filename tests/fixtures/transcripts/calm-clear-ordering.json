@@ -1,0 +1,8 @@
+{
+  "id": "calm-clear-ordering",
+  "transcript": "Hi, I'd like to place an order for pickup. Could I get two veggie wraps and one iced tea, please?",
+  "expected_score_range": {
+    "min": 78,
+    "max": 96
+  }
+}

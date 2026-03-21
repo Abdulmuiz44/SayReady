@@ -4,26 +4,13 @@ import { z } from "npm:zod@3.23.8";
 import { getConfig } from "../_shared/config.ts";
 import { HttpError, jsonResponse, sanitizeErrorResponse } from "../_shared/errors.ts";
 import { evaluateTranscript, transcribeAudio } from "../_shared/openai.ts";
+import { EVAL_PROMPT_VERSION, evaluateWithSchemaRetry, normalizeRubric } from "./evaluation.ts";
 
 const requestSchema = z.object({
   session_id: z.string().uuid(),
   audio_path: z.string().min(1).optional(),
   audio_bucket: z.string().min(1).optional(),
   timezone: z.string().min(1).optional(),
-});
-
-const evaluationSchema = z.object({
-  summary: z.string(),
-  score: z.number().min(0).max(100),
-  confidence: z.number().min(0).max(1),
-  feedback_items: z.array(z.object({
-    category: z.string(),
-    severity: z.enum(["low", "medium", "high"]),
-    quote: z.string().optional(),
-    explanation: z.string(),
-    suggestion: z.string(),
-    mistake_key: z.string().optional(),
-  })),
 });
 
 const isSameLocalDate = (dateA: Date, dateB: Date, timeZone: string): boolean => {
@@ -159,27 +146,14 @@ Deno.serve(async (req) => {
       mimeType: audioData.type,
     });
 
-    let evaluated: z.infer<typeof evaluationSchema> | null = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const raw = await evaluateTranscript({
-        apiKey: config.openAiApiKey,
-        model: config.evaluationModel,
-        rubric: scenario.rubric,
-        transcript,
-      });
-      const parsed = evaluationSchema.safeParse(raw);
-      if (parsed.success) {
-        evaluated = parsed.data;
-        break;
-      }
-      if (attempt === 1) {
-        throw new HttpError(502, "evaluation_invalid_schema", "Evaluation output failed schema validation.");
-      }
-    }
+    const normalizedRubric = normalizeRubric(scenario.rubric);
 
-    if (!evaluated) {
-      throw new HttpError(502, "evaluation_failed", "Could not evaluate session.");
-    }
+    const evaluated = await evaluateWithSchemaRetry(() => evaluateTranscript({
+      apiKey: config.openAiApiKey,
+      model: config.evaluationModel,
+      rubric: normalizedRubric,
+      transcript,
+    }));
 
     const now = new Date();
 
@@ -194,6 +168,11 @@ Deno.serve(async (req) => {
         summary: evaluated.summary,
         created_local_date: todayDate,
         evaluated_at: now.toISOString(),
+        raw_evaluation: {
+          prompt_version: EVAL_PROMPT_VERSION,
+          rubric: normalizedRubric,
+          evaluation: evaluated,
+        },
       })
       .select("id")
       .single();
