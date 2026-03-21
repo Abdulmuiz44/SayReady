@@ -39,7 +39,7 @@ export const getConfig = (): AppConfig => ({
   openAiApiKey: requireEnv("OPENAI_API_KEY"),
   transcriptionModel: optionalEnv("OPENAI_TRANSCRIPTION_MODEL", "gpt-4o-mini-transcribe"),
   evaluationModel: optionalEnv("OPENAI_EVALUATION_MODEL", "gpt-4.1-mini"),
-  freeTierDailyEvaluationLimit: optionalIntEnv("FREE_TIER_DAILY_EVALUATION_LIMIT", 3),
+  freeTierDailyEvaluationLimit: optionalIntEnv("FREE_TIER_DAILY_EVALUATION_LIMIT", 2),
   revenueCatWebhookSecret: optionalEnv("REVENUECAT_WEBHOOK_SECRET", ""),
   appTimeZoneDefault: optionalEnv("APP_DEFAULT_TIMEZONE", "UTC"),
 });

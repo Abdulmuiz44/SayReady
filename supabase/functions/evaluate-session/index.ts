@@ -113,15 +113,14 @@ Deno.serve(async (req) => {
         .from("session_attempts")
         .select("id", { count: "exact", head: true })
         .eq("user_id", user.id)
-        .gte("created_local_date", todayDate)
-        .lte("created_local_date", todayDate);
+        .eq("created_local_date", todayDate);
 
       if (limitError) {
         throw new HttpError(500, "limit_check_failed", "Failed to verify evaluation limits.");
       }
 
       if ((count ?? 0) >= config.freeTierDailyEvaluationLimit) {
-        throw new HttpError(429, "daily_limit_reached", "Daily free-tier evaluation limit reached.");
+        throw new HttpError(429, "daily_limit_reached", `Daily free-tier evaluation limit (${config.freeTierDailyEvaluationLimit}) reached.`);
       }
     }
 
