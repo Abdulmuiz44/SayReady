@@ -7,6 +7,12 @@ export type AppConfig = {
   freeTierDailyEvaluationLimit: number;
   revenueCatWebhookSecret: string;
   appTimeZoneDefault: string;
+  evaluationRateLimitUserWindowCount: number;
+  evaluationRateLimitUserWindowMinutes: number;
+  evaluationRateLimitIpWindowCount: number;
+  evaluationRateLimitIpWindowMinutes: number;
+  dataExportBucket: string;
+  sessionAudioBucket: string;
 };
 
 const requireEnv = (name: string): string => {
@@ -42,4 +48,10 @@ export const getConfig = (): AppConfig => ({
   freeTierDailyEvaluationLimit: optionalIntEnv("FREE_TIER_DAILY_EVALUATION_LIMIT", 3),
   revenueCatWebhookSecret: optionalEnv("REVENUECAT_WEBHOOK_SECRET", ""),
   appTimeZoneDefault: optionalEnv("APP_DEFAULT_TIMEZONE", "UTC"),
+  evaluationRateLimitUserWindowCount: optionalIntEnv("EVALUATION_RATE_LIMIT_USER_COUNT", 30),
+  evaluationRateLimitUserWindowMinutes: optionalIntEnv("EVALUATION_RATE_LIMIT_USER_WINDOW_MINUTES", 60),
+  evaluationRateLimitIpWindowCount: optionalIntEnv("EVALUATION_RATE_LIMIT_IP_COUNT", 100),
+  evaluationRateLimitIpWindowMinutes: optionalIntEnv("EVALUATION_RATE_LIMIT_IP_WINDOW_MINUTES", 60),
+  dataExportBucket: optionalEnv("DATA_EXPORT_BUCKET", "user-data-exports"),
+  sessionAudioBucket: optionalEnv("SESSION_AUDIO_BUCKET", "session-audio"),
 });

@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 import { getConfig } from "../_shared/config.ts";
 import { HttpError, jsonResponse, sanitizeErrorResponse } from "../_shared/errors.ts";
@@ -17,6 +17,16 @@ type RevenueCatPayload = {
   event?: RevenueCatEvent;
 };
 
+type Deps = {
+  createSupabase: (serviceRoleKey: string, supabaseUrl: string) => SupabaseClient;
+};
+
+const defaultDeps: Deps = {
+  createSupabase: (serviceRoleKey, supabaseUrl) => createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  }),
+};
+
 const timingSafeEqual = (a: string, b: string): boolean => {
   if (a.length !== b.length) return false;
   let result = 0;
@@ -26,7 +36,7 @@ const timingSafeEqual = (a: string, b: string): boolean => {
   return result === 0;
 };
 
-Deno.serve(async (req) => {
+export const handleRevenuecatWebhook = async (req: Request, deps: Deps = defaultDeps): Promise<Response> => {
   try {
     if (req.method !== "POST") {
       throw new HttpError(405, "method_not_allowed", "Only POST is allowed.");
@@ -50,19 +60,7 @@ Deno.serve(async (req) => {
       throw new HttpError(400, "invalid_payload", "Missing required RevenueCat event fields.");
     }
 
-    const supabase = createClient(config.supabaseUrl, config.supabaseServiceRoleKey, {
-      auth: { persistSession: false },
-    });
-
-    const { data: existingEvent } = await supabase
-      .from("revenuecat_webhook_events")
-      .select("event_id")
-      .eq("event_id", event.id)
-      .maybeSingle();
-
-    if (existingEvent) {
-      return jsonResponse({ received: true, deduplicated: true });
-    }
+    const supabase = deps.createSupabase(config.supabaseServiceRoleKey, config.supabaseUrl);
 
     const { error: eventInsertError } = await supabase
       .from("revenuecat_webhook_events")
@@ -75,6 +73,9 @@ Deno.serve(async (req) => {
       });
 
     if (eventInsertError) {
+      if (eventInsertError.code === "23505") {
+        return jsonResponse({ received: true, deduplicated: true });
+      }
       throw new HttpError(500, "webhook_event_persist_failed", "Failed to persist webhook event.");
     }
 
@@ -103,4 +104,8 @@ Deno.serve(async (req) => {
   } catch (error) {
     return sanitizeErrorResponse(error);
   }
-});
+};
+
+if (import.meta.main) {
+  Deno.serve(handleRevenuecatWebhook);
+}

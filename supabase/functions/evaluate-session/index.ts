@@ -46,7 +46,22 @@ const getLocalDateString = (date: Date, timeZone: string): string => {
   return formatter.format(date);
 };
 
-Deno.serve(async (req) => {
+
+
+
+const getClientIp = (req: Request): string => {
+  const forwarded = req.headers.get("x-forwarded-for") ?? req.headers.get("X-Forwarded-For");
+  if (forwarded) {
+    return forwarded.split(",")[0]?.trim() ?? "unknown";
+  }
+  return req.headers.get("x-real-ip") ?? "unknown";
+};
+
+const getIsoMinutesAgo = (minutes: number): string => {
+  return new Date(Date.now() - minutes * 60 * 1000).toISOString();
+};
+
+export const handleEvaluateSession = async (req: Request): Promise<Response> => {
   try {
     if (req.method !== "POST") {
       throw new HttpError(405, "method_not_allowed", "Only POST is allowed.");
@@ -59,6 +74,7 @@ Deno.serve(async (req) => {
 
     const payload = requestSchema.parse(await req.json());
     const config = getConfig();
+    const requesterIp = getClientIp(req);
 
     const supabase = createClient(config.supabaseUrl, config.supabaseServiceRoleKey, {
       global: {
@@ -123,6 +139,39 @@ Deno.serve(async (req) => {
       if ((count ?? 0) >= config.freeTierDailyEvaluationLimit) {
         throw new HttpError(429, "daily_limit_reached", "Daily free-tier evaluation limit reached.");
       }
+    }
+
+    const userWindowStart = getIsoMinutesAgo(config.evaluationRateLimitUserWindowMinutes);
+    const ipWindowStart = getIsoMinutesAgo(config.evaluationRateLimitIpWindowMinutes);
+
+    const { count: userWindowCount, error: userWindowError } = await supabase
+      .from("usage_events")
+      .select("id", { count: "exact", head: true })
+      .eq("event_type", "evaluation.request")
+      .eq("user_id", user.id)
+      .gte("event_at", userWindowStart);
+
+    if (userWindowError) {
+      throw new HttpError(500, "rate_limit_user_check_failed", "Failed to evaluate per-user rate limit.");
+    }
+
+    if ((userWindowCount ?? 0) >= config.evaluationRateLimitUserWindowCount) {
+      throw new HttpError(429, "user_rate_limited", "Too many evaluations requested in the current window.");
+    }
+
+    const { count: ipWindowCount, error: ipWindowError } = await supabase
+      .from("usage_events")
+      .select("id", { count: "exact", head: true })
+      .eq("event_type", "evaluation.request")
+      .eq("metadata->>ip", requesterIp)
+      .gte("event_at", ipWindowStart);
+
+    if (ipWindowError) {
+      throw new HttpError(500, "rate_limit_ip_check_failed", "Failed to evaluate per-IP rate limit.");
+    }
+
+    if ((ipWindowCount ?? 0) >= config.evaluationRateLimitIpWindowCount) {
+      throw new HttpError(429, "ip_rate_limited", "Too many evaluations requested from this IP in the current window.");
     }
 
     const { data: scenario, error: scenarioError } = await supabase
@@ -307,6 +356,23 @@ Deno.serve(async (req) => {
       throw new HttpError(500, "session_update_failed", "Failed to update practice session aggregate.");
     }
 
+    const { error: usageEventError } = await supabase
+      .from("usage_events")
+      .insert({
+        user_id: user.id,
+        event_type: "evaluation.request",
+        event_at: now.toISOString(),
+        metadata: {
+          ip: requesterIp,
+          session_id: session.id,
+          premium: isPremium,
+        },
+      });
+
+    if (usageEventError) {
+      throw new HttpError(500, "usage_event_insert_failed", "Failed to persist evaluation usage event.");
+    }
+
     return jsonResponse({
       attempt_id: createdAttempt.id,
       transcript,
@@ -320,4 +386,8 @@ Deno.serve(async (req) => {
     }
     return sanitizeErrorResponse(error);
   }
-});
+};
+
+if (import.meta.main) {
+  Deno.serve(handleEvaluateSession);
+}
