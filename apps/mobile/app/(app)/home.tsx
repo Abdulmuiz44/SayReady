@@ -1,14 +1,28 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'expo-router';
-import { SafeAreaView, Text, View } from 'react-native';
+import { Text } from 'react-native';
+import { AppShell, Card, LoadingState, ScreenHeader } from '@/components';
+import { useAuth } from '@/providers/AuthProvider';
+import { listScenarios } from '@/services/scenarios';
+import type { Scenario } from '@/types';
 
 export default function HomeScreen() {
+  const { profile } = useAuth();
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+
+  useEffect(() => {
+    listScenarios().then(({ data }) => setScenarios(data ?? []));
+  }, []);
+
+  if (!profile) return <LoadingState message="Loading dashboard..." />;
+
   return (
-    <SafeAreaView>
-      <View style={{ padding: 24, gap: 12 }}>
-        <Text style={{ fontSize: 28, fontWeight: '700' }}>App Home</Text>
-        <Text>Core app placeholder screen.</Text>
-        <Link href="/(auth)/sign-in">Sign out</Link>
-      </View>
-    </SafeAreaView>
+    <AppShell>
+      <ScreenHeader title="Dashboard" subtitle={`Streak: ${profile.streak ?? 0} days`} />
+      <Card><Text style={{ color: '#fff' }}>Recommended: {scenarios[0]?.title ?? 'No recommendation yet'}</Text></Card>
+      <Card><Text style={{ color: '#fff' }}>Weak areas: {(profile.weak_areas ?? []).join(', ') || 'None yet'}</Text></Card>
+      <Link href="/(app)/scenarios"><Text style={{ color: '#bcbcff' }}>Browse scenarios</Text></Link>
+      <Link href="/(app)/history"><Text style={{ color: '#bcbcff' }}>Continue previous session</Text></Link>
+    </AppShell>
   );
 }
