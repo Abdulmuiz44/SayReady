@@ -1,3 +1,3 @@
 # SayReady Docs
 
-Project documentation lives here.
+- [Release Checklist](./RELEASE.md)
