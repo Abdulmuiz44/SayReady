@@ -21,24 +21,47 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(true);
 
   const reloadProfile = async () => {
-    if (!user?.id) return;
-    const { data } = await fetchProfile(user.id);
-    setProfile(data ?? null);
+    if (!user?.id) {
+      setProfile(null);
+      return;
+    }
+
+    try {
+      const { data } = await fetchProfile(user.id);
+      setProfile(data ?? null);
+    } catch {
+      setProfile(null);
+    }
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setLoading(false);
-    });
+    let active = true;
+
+    supabase.auth
+      .getSession()
+      .then(async ({ data }) => {
+        if (!active) return;
+        setSession(data.session);
+        setUser(data.session?.user ?? null);
+      })
+      .catch(() => {
+        if (!active) return;
+        setSession(null);
+        setUser(null);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
     });
 
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
