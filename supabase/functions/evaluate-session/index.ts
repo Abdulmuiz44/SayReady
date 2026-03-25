@@ -30,6 +30,11 @@ const evaluationSchema = z.object({
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const jitterMs = (baseMs: number): number => baseMs + Math.floor(Math.random() * 120);
+const isMissingColumnError = (error: unknown): boolean => {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as { code?: string; message?: string };
+  return maybeError.code === "42703" || maybeError.code === "PGRST204" || /column/i.test(maybeError.message ?? "");
+};
 
 const retryUploadFetch = async <T>(operation: () => Promise<T>): Promise<T> => {
   let lastError: unknown;
@@ -112,6 +117,10 @@ Deno.serve(async (req) => {
     const cleanupPartialAttempt = async () => {
       if (!createdAttemptId || cleanedUp) return;
       cleanedUp = true;
+      const cleanupCurrent = await supabase.from("feedback_items").delete().eq("session_attempt_id", createdAttemptId);
+      if (isMissingColumnError(cleanupCurrent.error)) {
+        await supabase.from("feedback_items").delete().eq("attempt_id", createdAttemptId);
+      }
       await supabase.from("feedback_items").delete().eq("session_attempt_id", createdAttemptId);
       await supabase.from("session_attempts").delete().eq("id", createdAttemptId);
     };
@@ -125,12 +134,22 @@ Deno.serve(async (req) => {
     if (sessionError) throw new HttpError(500, "session_lookup_failed", "Failed to load session.");
     if (!session || session.user_id !== user.id) throw new HttpError(403, "forbidden", "Session does not belong to user.");
 
-    const { data: existingAttempt } = await supabase
+    const existingAttemptCurrent = await supabase
       .from("session_attempts")
+      .select("id,status,raw_feedback")
       .select("id,status,overall_score,transcription_confidence,raw_feedback")
       .eq("practice_session_id", session.id)
       .eq("attempt_number", payload.attempt_number)
       .maybeSingle();
+    const existingAttemptLegacy = isMissingColumnError(existingAttemptCurrent.error)
+      ? await supabase
+        .from("session_attempts")
+        .select("id,status,raw_feedback")
+        .eq("session_id", session.id)
+        .eq("attempt_number", payload.attempt_number)
+        .maybeSingle()
+      : null;
+    const existingAttempt = existingAttemptLegacy?.data ?? existingAttemptCurrent.data;
 
     if (existingAttempt?.status === "scored") {
       await writeFunctionLog("success");
@@ -142,7 +161,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: activeSub } = await supabase
+    const activeSubCurrent = await supabase
       .from("subscriptions")
       .select("id,status,current_period_end")
       .eq("user_id", user.id)
@@ -151,6 +170,17 @@ Deno.serve(async (req) => {
       .order("current_period_end", { ascending: false })
       .limit(1)
       .maybeSingle();
+    const activeSubLegacy = isMissingColumnError(activeSubCurrent.error)
+      ? await supabase
+        .from("subscriptions")
+        .select("id,active,entitlement")
+        .eq("user_id", user.id)
+        .eq("active", true)
+        .order("current_period_ends_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      : null;
+    const isPremium = Boolean(activeSubCurrent.data ?? activeSubLegacy?.data);
 
     const isPremium = Boolean(activeSub);
 
@@ -211,7 +241,19 @@ Deno.serve(async (req) => {
     const now = new Date();
     const idempotencyKey = `${session.id}:${payload.attempt_number}`;
 
-    const { data: createdAttempt, error: attemptError } = await upsertWithConflictRetry(() =>
+    const baseFeedback = {
+      score: evaluated.score,
+      summary: evaluated.summary,
+      strengths: [],
+      mistakes: evaluated.feedback_items.map((item) => ({
+        text: item.quote ?? item.category,
+        correction: item.suggestion,
+        reason: item.explanation,
+      })),
+      recommendations: evaluated.feedback_items.map((item) => item.suggestion),
+    };
+
+    const attemptCurrent = await upsertWithConflictRetry(() =>
       supabase
         .from("session_attempts")
         .upsert({
@@ -221,6 +263,7 @@ Deno.serve(async (req) => {
           idempotency_key: idempotencyKey,
           transcription_confidence: evaluated.confidence,
           overall_score: evaluated.score,
+          raw_feedback: baseFeedback,
           raw_feedback: {
             score: evaluated.score,
             summary: evaluated.summary,
@@ -237,6 +280,29 @@ Deno.serve(async (req) => {
         .select("id")
         .single()
     );
+    const attemptLegacy = isMissingColumnError(attemptCurrent.error)
+      ? await upsertWithConflictRetry(() =>
+        supabase
+          .from("session_attempts")
+          .upsert({
+            user_id: user.id,
+            session_id: session.id,
+            attempt_number: payload.attempt_number,
+            idempotency_key: idempotencyKey,
+            transcript,
+            score: evaluated.score,
+            confidence: evaluated.confidence,
+            summary: evaluated.summary,
+            raw_feedback: baseFeedback,
+            status: "scored",
+            evaluated_at: now.toISOString(),
+          }, { onConflict: "session_id,attempt_number" })
+          .select("id")
+          .single()
+      )
+      : null;
+    const createdAttempt = attemptLegacy?.data ?? attemptCurrent.data;
+    const attemptError = attemptLegacy?.error ?? attemptCurrent.error;
 
     if (attemptError || !createdAttempt) throw new HttpError(500, "attempt_persist_failed", "Failed to save session attempt.");
     createdAttemptId = createdAttempt.id;
@@ -252,7 +318,22 @@ Deno.serve(async (req) => {
         evidence: item.quote ?? item.suggestion,
       }));
 
-      const { error: feedbackError } = await supabase.from("feedback_items").insert(feedbackRows);
+      const feedbackCurrent = await supabase.from("feedback_items").insert(feedbackRowsCurrent);
+      const feedbackLegacy = isMissingColumnError(feedbackCurrent.error)
+        ? await supabase.from("feedback_items").insert(
+          evaluated.feedback_items.map((item) => ({
+            attempt_id: createdAttempt.id,
+            user_id: user.id,
+            category: item.category,
+            severity: item.severity,
+            quote: item.quote ?? null,
+            explanation: item.explanation,
+            suggestion: item.suggestion,
+            mistake_key: item.mistake_key ?? null,
+          })),
+        )
+        : null;
+      const feedbackError = feedbackLegacy?.error ?? feedbackCurrent.error;
       if (feedbackError) {
         await cleanupPartialAttempt();
         throw new HttpError(500, "feedback_persist_failed", "Failed to save feedback items.");
@@ -311,6 +392,7 @@ Deno.serve(async (req) => {
       evaluation: evaluated,
       session_id: session.id,
       score: evaluated.score,
+      feedback: baseFeedback,
       feedback: {
         score: evaluated.score,
         summary: evaluated.summary,
