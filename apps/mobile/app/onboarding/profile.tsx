@@ -35,13 +35,15 @@ export default function OnboardingProfile() {
         level: level ?? 'beginner',
       });
 
-      if (saveError) throw saveError;
+      if (saveError) {
+        throw new Error(saveError.message);
+      }
 
       setProfile(nextProfile);
       await reloadProfile();
       router.replace('/(app)/home');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to finish onboarding.');
+      setError(err instanceof Error ? err.message : String(err ?? 'Unable to finish onboarding.'));
     } finally {
       setSubmitting(false);
     }
