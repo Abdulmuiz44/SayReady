@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { z } from "npm:zod@3.23.8";
 
 import { getConfig } from "../_shared/config.ts";
-import { HttpError, jsonResponse, sanitizeErrorResponse } from "../_shared/errors.ts";
+import { HttpError, handleCorsPreflight, jsonResponse, sanitizeErrorResponse } from "../_shared/errors.ts";
 import { evaluateTranscript, transcribeAudio } from "../_shared/mistral.ts";
 import { trackServerEvent } from "../_shared/posthog.ts";
 
@@ -79,6 +79,9 @@ const upsertWithConflictRetry = async <T extends { error: { code?: string } | nu
 };
 
 Deno.serve(async (req) => {
+  const preflight = handleCorsPreflight(req);
+  if (preflight) return preflight;
+
   const startedAt = Date.now();
   const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
   let currentUserId: string | null = null;
@@ -258,94 +261,51 @@ Deno.serve(async (req) => {
           user_id: user.id,
           mistake_key: mistakeKey,
           count: aggregate.count,
+          category: aggregate.severity,
           last_seen_at: now.toISOString(),
-          latest_severity: aggregate.severity,
-        }, { onConflict: "user_id,mistake_key", ignoreDuplicates: false }));
-
+        }, { onConflict: "user_id,mistake_key" }));
         if (mistakeError) {
           await cleanupPartialAttempt();
-          throw new HttpError(500, "mistake_upsert_failed", "Failed to update user mistakes.");
+          throw new HttpError(500, "mistake_persist_failed", "Failed to save mistake tracking.");
         }
       }
     }
 
-    const { data: previousAttempt } = await supabase
-      .from("session_attempts")
-      .select("evaluated_at")
-      .eq("user_id", user.id)
-      .neq("id", createdAttempt.id)
-      .order("evaluated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const shouldIncrementStreak = previousAttempt ? !isSameLocalDate(new Date(previousAttempt.evaluated_at), now, timeZone) : true;
-
-    const { data: streakRow } = await supabase.from("user_streaks").select("user_id,current_streak,longest_streak,last_activity_date").eq("user_id", user.id).maybeSingle();
-
-    let nextStreak = 1;
-    let longestStreak = 1;
-    if (streakRow?.last_activity_date) {
-      const lastDate = new Date(`${streakRow.last_activity_date}T00:00:00.000Z`);
-      const yesterday = new Date(now);
-      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-      if (isSameLocalDate(lastDate, now, timeZone)) nextStreak = streakRow.current_streak;
-      else if (isSameLocalDate(lastDate, yesterday, timeZone) && shouldIncrementStreak) nextStreak = streakRow.current_streak + 1;
-      else nextStreak = 1;
-      longestStreak = Math.max(streakRow.longest_streak ?? 0, nextStreak);
-    }
-
-    const { error: streakError } = await upsertWithConflictRetry(() => supabase.from("user_streaks").upsert({
-      user_id: user.id,
-      current_streak: nextStreak,
-      longest_streak: longestStreak,
-      last_activity_date: todayDate,
-    }, { onConflict: "user_id" }));
-
-    if (streakError) {
-      await cleanupPartialAttempt();
-      throw new HttpError(500, "streak_update_failed", "Failed to update user streak.");
-    }
-
-    const { error: sessionUpdateError } = await supabase
-      .from("practice_sessions")
-      .update({
+    const updates = [
+      supabase.from("practice_sessions").update({
         status: "completed",
-        failure_reason_code: null,
-        latest_attempt_id: createdAttempt.id,
-        latest_score: evaluated.score,
-        latest_summary: evaluated.summary,
-        attempts_count: session.attempts_count ? session.attempts_count + 1 : 1,
-        updated_at: now.toISOString(),
-      })
-      .eq("id", session.id)
-      .eq("user_id", user.id);
+        completed_at: now.toISOString(),
+        score: evaluated.score,
+        summary: evaluated.summary,
+      }).eq("id", session.id),
+      supabase.from("user_streaks").upsert({
+        user_id: user.id,
+        current_streak_days: 1,
+        best_streak_days: 1,
+        last_practiced_on: todayDate,
+        freeze_tokens: 0,
+      }, { onConflict: "user_id" }),
+    ];
 
-    if (sessionUpdateError) {
-      await cleanupPartialAttempt();
-      throw new HttpError(500, "session_update_failed", "Failed to update practice session aggregate.");
-    }
-
-    await trackServerEvent({
-      distinctId: user.id,
-      event: "session_evaluated",
-      properties: { session_id: session.id, attempt_id: createdAttempt.id, attempt_number: payload.attempt_number, score: evaluated.score, is_premium: isPremium, request_id: requestId },
-    });
-
+    await Promise.all(updates);
     await writeFunctionLog("success");
-    return jsonResponse({ attempt_id: createdAttempt.id, transcript, evaluation: evaluated, streak: nextStreak, is_premium: isPremium });
+
+    trackServerEvent("session_evaluated", {
+      user_id: user.id,
+      session_id: session.id,
+      attempt_number: payload.attempt_number,
+      score: evaluated.score,
+    }).catch(() => undefined);
+
+    return jsonResponse({
+      attempt_id: createdAttempt.id,
+      evaluation: evaluated,
+      session_id: session.id,
+      score: evaluated.score,
+    });
   } catch (error) {
-    failureCode = error instanceof HttpError ? error.code : "unhandled_error";
-
-    if (payload?.session_id && currentUserId) {
-      await supabase
-        .from("practice_sessions")
-        .update({ status: "failed", failure_reason_code: failureCode, updated_at: new Date().toISOString() })
-        .eq("id", payload.session_id)
-        .eq("user_id", currentUserId);
-    }
-
+    failureCode = error instanceof HttpError ? error.code : "unexpected_error";
     await writeFunctionLog("failed");
-    if (error instanceof z.ZodError) return jsonResponse({ error: "invalid_request", message: error.message }, 400);
     return sanitizeErrorResponse(error);
   }
 });
