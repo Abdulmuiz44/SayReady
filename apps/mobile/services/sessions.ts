@@ -27,8 +27,8 @@ export async function uploadAttemptAudio(userId: string, sessionId: string, atte
 }
 
 export async function evaluateSession(sessionId: string, attempt: number, audioPath: string) {
-  return supabase.functions.invoke('evaluate-speaking-session', {
-    body: { sessionId, attempt, audioPath },
+  return supabase.functions.invoke('evaluate-session', {
+    body: { session_id: sessionId, attempt_number: attempt, audio_path: audioPath },
   });
 }
 
