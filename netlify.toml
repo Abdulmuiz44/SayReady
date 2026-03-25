@@ -1,6 +1,6 @@
 [build]
-  command = "pnpm --filter @sayready/mobile exec expo export --platform web"
-  publish = "apps/mobile/dist"
+  command = "pnpm exec expo export --platform web"
+  publish = "dist"
 
 [[redirects]]
   from = "/*"
