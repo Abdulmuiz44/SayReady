@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Link, router } from 'expo-router';
-import { Text, TextInput } from 'react-native';
-import { AppShell, PrimaryButton, ScreenHeader } from '@/components';
+import { router } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppShell, Card, InputField, PrimaryButton, ScreenHeader } from '@/components';
 import { signIn } from '@/services/auth';
 
 export default function SignInScreen() {
@@ -18,12 +18,34 @@ export default function SignInScreen() {
 
   return (
     <AppShell>
-      <ScreenHeader title="Sign in" />
-      <TextInput placeholder="Email" autoCapitalize="none" value={email} onChangeText={setEmail} style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12 }} />
-      <TextInput placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12 }} />
-      {error ? <Text style={{ color: '#ff8a8a' }}>{error}</Text> : null}
-      <PrimaryButton title="Continue" onPress={onSubmit} />
-      <Link href="/(auth)/forgot-password"><Text style={{ color: '#bdbddb' }}>Forgot password?</Text></Link>
+      <View style={styles.hero}>
+        <ScreenHeader title="Welcome back" subtitle="Continue your practice streak with the same calm, centered interface." />
+      </View>
+
+      <Card>
+        <InputField label="Email" placeholder="you@example.com" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
+        <InputField label="Password" placeholder="Your password" secureTextEntry value={password} onChangeText={setPassword} />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <PrimaryButton title="Continue" onPress={onSubmit} />
+        <Pressable onPress={() => router.push('/(auth)/forgot-password')}>
+          <Text style={styles.link}>Forgot password?</Text>
+        </Pressable>
+      </Card>
     </AppShell>
   );
 }
+
+const styles = StyleSheet.create({
+  hero: {
+    alignItems: 'center',
+  },
+  error: {
+    color: '#fda4af',
+    textAlign: 'center',
+  },
+  link: {
+    color: '#a1a1aa',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+});

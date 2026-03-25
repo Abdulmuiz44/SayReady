@@ -15,8 +15,26 @@ export function ProgressChart({ points }: { points: number[] }) {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 8, alignItems: 'flex-end', height: 120 },
-  column: { flex: 1, alignItems: 'center', gap: 6 },
-  bar: { width: '100%', backgroundColor: '#6d5efc', borderRadius: 8, minHeight: 4 },
-  label: { color: '#aaa' },
+  row: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-end',
+    height: 160,
+    paddingTop: 8,
+  },
+  column: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 8,
+  },
+  bar: {
+    width: '100%',
+    minHeight: 8,
+    borderRadius: 999,
+    backgroundColor: '#fafafa',
+  },
+  label: {
+    color: '#a1a1aa',
+    fontSize: 12,
+  },
 });

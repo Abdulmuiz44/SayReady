@@ -17,9 +17,9 @@ export default function ProgressScreen() {
 
   return (
     <AppShell>
-      <ScreenHeader title="Progress" subtitle="Recent speaking scores" />
+      <ScreenHeader title="Progress" subtitle="Recent speaking scores with a simple, centered view." />
       <Card>
-        {points.length ? <ProgressChart points={points} /> : <Text style={{ color: '#bbb' }}>No attempts yet.</Text>}
+        {points.length ? <ProgressChart points={points} /> : <Text style={{ color: '#a1a1aa', textAlign: 'center' }}>No attempts yet.</Text>}
       </Card>
     </AppShell>
   );

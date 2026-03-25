@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Text, TextInput } from 'react-native';
-import { AppShell, PrimaryButton, ScreenHeader } from '@/components';
+import { Text } from 'react-native';
+import { AppShell, Card, InputField, PrimaryButton, ScreenHeader } from '@/components';
 import { requestReset } from '@/services/auth';
 
 export default function ForgotPasswordScreen() {
@@ -14,10 +14,12 @@ export default function ForgotPasswordScreen() {
 
   return (
     <AppShell>
-      <ScreenHeader title="Reset password" />
-      <TextInput placeholder="Email" autoCapitalize="none" value={email} onChangeText={setEmail} style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12 }} />
-      <PrimaryButton title="Send reset link" onPress={onSubmit} />
-      {status ? <Text style={{ color: '#cfcfe2' }}>{status}</Text> : null}
+      <ScreenHeader title="Reset password" subtitle="We&apos;ll send a sign-in link to your inbox." />
+      <Card>
+        <InputField label="Email" placeholder="you@example.com" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
+        <PrimaryButton title="Send reset link" onPress={onSubmit} />
+        {status ? <Text style={{ color: '#cfcfe2', textAlign: 'center' }}>{status}</Text> : null}
+      </Card>
     </AppShell>
   );
 }

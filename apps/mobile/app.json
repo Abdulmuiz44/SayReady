@@ -11,9 +11,18 @@
     },
     "android": {},
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "output": "single"
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow SayReady to access your microphone."
+        }
+      ],
+      "expo-router"
+    ],
     "experiments": {
       "typedRoutes": true
     }

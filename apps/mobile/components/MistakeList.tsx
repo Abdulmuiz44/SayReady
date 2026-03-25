@@ -7,9 +7,9 @@ export function MistakeList({ mistakes }: { mistakes: EvaluationFeedback['mistak
     <View style={{ gap: 10 }}>
       {mistakes.map((m, idx) => (
         <Card key={`${m.text}-${idx}`}>
-          <Text style={{ color: '#ffb3b3' }}>Mistake: {m.text}</Text>
-          <Text style={{ color: '#b6f0c7' }}>Better: {m.correction}</Text>
-          <Text style={{ color: '#c9c9d9' }}>{m.reason}</Text>
+          <Text style={{ color: '#fda4af', fontWeight: '700' }}>{m.text}</Text>
+          <Text style={{ color: '#86efac' }}>Better: {m.correction}</Text>
+          <Text style={{ color: '#a1a1aa', lineHeight: 20 }}>{m.reason}</Text>
         </Card>
       ))}
     </View>

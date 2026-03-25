@@ -271,8 +271,6 @@ set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
-alter table storage.objects enable row level security;
-
 create policy "session audio own read"
 on storage.objects
 for select
@@ -341,3 +339,4 @@ using (
   bucket_id = 'avatars'
   and auth.uid()::text = split_part(name, '/', 1)
 );
+

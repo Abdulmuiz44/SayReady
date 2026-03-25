@@ -2,6 +2,7 @@ export * from './AppShell';
 export * from './ScreenHeader';
 export * from './Buttons';
 export * from './Card';
+export * from './InputField';
 export * from './Score';
 export * from './States';
 export * from './AudioRecorder';
