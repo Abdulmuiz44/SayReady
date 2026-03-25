@@ -121,6 +121,7 @@ Deno.serve(async (req) => {
       if (isMissingColumnError(cleanupCurrent.error)) {
         await supabase.from("feedback_items").delete().eq("attempt_id", createdAttemptId);
       }
+      await supabase.from("feedback_items").delete().eq("session_attempt_id", createdAttemptId);
       await supabase.from("session_attempts").delete().eq("id", createdAttemptId);
     };
 
@@ -136,6 +137,7 @@ Deno.serve(async (req) => {
     const existingAttemptCurrent = await supabase
       .from("session_attempts")
       .select("id,status,raw_feedback")
+      .select("id,status,overall_score,transcription_confidence,raw_feedback")
       .eq("practice_session_id", session.id)
       .eq("attempt_number", payload.attempt_number)
       .maybeSingle();
@@ -179,6 +181,8 @@ Deno.serve(async (req) => {
         .maybeSingle()
       : null;
     const isPremium = Boolean(activeSubCurrent.data ?? activeSubLegacy?.data);
+
+    const isPremium = Boolean(activeSub);
 
     const dayStart = new Date();
     dayStart.setUTCHours(0, 0, 0, 0);
@@ -260,6 +264,17 @@ Deno.serve(async (req) => {
           transcription_confidence: evaluated.confidence,
           overall_score: evaluated.score,
           raw_feedback: baseFeedback,
+          raw_feedback: {
+            score: evaluated.score,
+            summary: evaluated.summary,
+            strengths: [],
+            mistakes: evaluated.feedback_items.map((item) => ({
+              text: item.quote ?? item.category,
+              correction: item.suggestion,
+              reason: item.explanation,
+            })),
+            recommendations: evaluated.feedback_items.map((item) => item.suggestion),
+          },
           status: "scored",
         }, { onConflict: "practice_session_id,attempt_number" })
         .select("id")
@@ -293,7 +308,7 @@ Deno.serve(async (req) => {
     createdAttemptId = createdAttempt.id;
 
     if (evaluated.feedback_items.length > 0) {
-      const feedbackRowsCurrent = evaluated.feedback_items.map((item) => ({
+      const feedbackRows = evaluated.feedback_items.map((item) => ({
         session_attempt_id: createdAttempt.id,
         user_id: user.id,
         category: item.category,
@@ -378,6 +393,17 @@ Deno.serve(async (req) => {
       session_id: session.id,
       score: evaluated.score,
       feedback: baseFeedback,
+      feedback: {
+        score: evaluated.score,
+        summary: evaluated.summary,
+        strengths: [],
+        mistakes: evaluated.feedback_items.map((item) => ({
+          text: item.quote ?? item.category,
+          correction: item.suggestion,
+          reason: item.explanation,
+        })),
+        recommendations: evaluated.feedback_items.map((item) => item.suggestion),
+      },
     });
   } catch (error) {
     failureCode = error instanceof HttpError ? error.code : "unexpected_error";
