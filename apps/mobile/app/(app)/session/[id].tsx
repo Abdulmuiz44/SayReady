@@ -33,7 +33,10 @@ export default function SessionScreen() {
     }
     const responseFeedback = evalResponse.data.feedback as EvaluationFeedback;
     setFeedback(responseFeedback);
-    await saveAttempt(id, attempt, responseFeedback, audio.filePath);
+    const { error: saveError } = await saveAttempt(user.id, id, attempt, responseFeedback, audio.filePath);
+    if (saveError) {
+      setError(saveError.message);
+    }
     setLoading(false);
   }
 
