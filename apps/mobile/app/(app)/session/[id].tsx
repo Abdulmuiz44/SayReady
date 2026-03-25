@@ -3,7 +3,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { Text } from 'react-native';
 import { AppShell, AudioRecorder, ErrorState, LoadingState, MistakeList, PrimaryButton, ScreenHeader, SessionFeedbackCard } from '@/components';
 import { useAuth } from '@/providers/AuthProvider';
-import { completeSession, evaluateSession, saveAttempt, uploadAttemptAudio } from '@/services/sessions';
+import { completeSession, evaluateSession, uploadAttemptAudio } from '@/services/sessions';
 import type { EvaluationFeedback } from '@/types';
 
 export default function SessionScreen() {
@@ -33,10 +33,6 @@ export default function SessionScreen() {
     }
     const responseFeedback = evalResponse.data.feedback as EvaluationFeedback;
     setFeedback(responseFeedback);
-    const { error: saveError } = await saveAttempt(user.id, id, attempt, responseFeedback, audio.filePath);
-    if (saveError) {
-      setError(saveError.message);
-    }
     setLoading(false);
   }
 
