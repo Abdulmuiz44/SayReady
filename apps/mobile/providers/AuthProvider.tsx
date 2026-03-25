@@ -9,6 +9,7 @@ type AuthContextValue = {
   session: Session | null;
   loading: boolean;
   profile: Profile | null;
+  setProfile: (profile: Profile | null) => void;
   reloadProfile: () => Promise<void>;
 };
 
@@ -69,7 +70,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [user?.id]);
 
   const value = useMemo(
-    () => ({ user, session, loading, profile, reloadProfile }),
+    () => ({ user, session, loading, profile, setProfile, reloadProfile }),
     [user, session, loading, profile],
   );
 

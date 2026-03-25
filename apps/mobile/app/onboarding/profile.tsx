@@ -1,31 +1,71 @@
 import { useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { TextInput } from 'react-native';
-import { AppShell, PrimaryButton, ScreenHeader } from '@/components';
+import { StyleSheet, Text, View } from 'react-native';
+import { AppShell, Card, InputField, PrimaryButton, ScreenHeader } from '@/components';
 import { useAuth } from '@/providers/AuthProvider';
 import { upsertOnboarding } from '@/services/profiles';
 
 export default function OnboardingProfile() {
-  const { user, reloadProfile } = useAuth();
+  const { user, setProfile, reloadProfile } = useAuth();
   const { goals, level } = useLocalSearchParams<{ goals: string; level: string }>();
   const [fullName, setFullName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function finish() {
-    if (!user) return;
-    await upsertOnboarding(user.id, {
-      full_name: fullName,
-      goals: goals ? JSON.parse(goals) : [],
-      level,
-    });
-    await reloadProfile();
-    router.replace('/(app)/home');
+    if (!user || submitting) return;
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const parsedGoals = goals ? JSON.parse(goals) : [];
+      const trimmedName = fullName.trim();
+
+      const { data, error: saveError } = await upsertOnboarding(user.id, {
+        ...(trimmedName ? { full_name: trimmedName } : {}),
+        goals: Array.isArray(parsedGoals) ? parsedGoals : [],
+        level: level ?? 'beginner',
+      });
+
+      if (saveError) throw saveError;
+
+      setProfile(data ?? null);
+      await reloadProfile();
+      router.replace('/(app)/home');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to finish onboarding.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <AppShell>
-      <ScreenHeader title="Your profile" />
-      <TextInput placeholder="Full name" value={fullName} onChangeText={setFullName} style={{ backgroundColor: '#fff', borderRadius: 10, padding: 12 }} />
-      <PrimaryButton title="Finish onboarding" onPress={finish} />
+      <View style={styles.hero}>
+        <ScreenHeader title="Your profile" subtitle="A few details so we can tailor your practice sessions." />
+      </View>
+
+      <Card>
+        <InputField
+          label="Full name"
+          placeholder="Abdulmuiz"
+          value={fullName}
+          onChangeText={setFullName}
+        />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <PrimaryButton title={submitting ? 'Saving...' : 'Finish onboarding'} onPress={finish} disabled={submitting} />
+      </Card>
     </AppShell>
   );
 }
+
+const styles = StyleSheet.create({
+  hero: {
+    alignItems: 'center',
+  },
+  error: {
+    color: '#fda4af',
+    textAlign: 'center',
+  },
+});
