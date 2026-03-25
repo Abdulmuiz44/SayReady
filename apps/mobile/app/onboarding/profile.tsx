@@ -21,8 +21,15 @@ export default function OnboardingProfile() {
     try {
       const parsedGoals = goals ? JSON.parse(goals) : [];
       const trimmedName = fullName.trim();
+      const nextProfile = {
+        id: user.id,
+        full_name: trimmedName || undefined,
+        goals: Array.isArray(parsedGoals) ? parsedGoals : [],
+        level: level ?? 'beginner',
+        onboarding_complete: true,
+      };
 
-      const { data, error: saveError } = await upsertOnboarding(user.id, {
+      const { error: saveError } = await upsertOnboarding(user.id, {
         ...(trimmedName ? { full_name: trimmedName } : {}),
         goals: Array.isArray(parsedGoals) ? parsedGoals : [],
         level: level ?? 'beginner',
@@ -30,7 +37,7 @@ export default function OnboardingProfile() {
 
       if (saveError) throw saveError;
 
-      setProfile(data ?? null);
+      setProfile(nextProfile);
       await reloadProfile();
       router.replace('/(app)/home');
     } catch (err) {

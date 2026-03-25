@@ -6,19 +6,15 @@ export async function fetchProfile(userId: string) {
 }
 
 export async function upsertOnboarding(userId: string, profile: Partial<Profile>) {
-  return supabase
-    .from('profiles')
-    .upsert(
-      {
-        id: userId,
-        ...profile,
-        onboarding_complete: true,
-        updated_at: new Date().toISOString(),
-      },
-      {
-        onConflict: 'id',
-      },
-    )
-    .select('*')
-    .single<Profile>();
+  return supabase.from('profiles').upsert(
+    {
+      id: userId,
+      ...profile,
+      onboarding_complete: true,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      onConflict: 'id',
+    },
+  );
 }
