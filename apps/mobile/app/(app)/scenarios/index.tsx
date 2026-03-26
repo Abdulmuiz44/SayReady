@@ -1,22 +1,38 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'expo-router';
 import { Text, View } from 'react-native';
-import { AppShell, Card, EmptyState, LoadingState, ScreenHeader } from '@/components';
+import { AppShell, Card, EmptyState, ErrorState, LoadingState, ScreenHeader } from '@/components';
 import { listScenarios } from '@/services/scenarios';
 import type { Scenario } from '@/types';
 
 export default function ScenariosScreen() {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [items, setItems] = useState<Scenario[]>([]);
 
-  useEffect(() => {
-    listScenarios().then(({ data }) => {
+  const loadScenarios = useCallback(async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const { data, error: loadError } = await listScenarios();
+      if (loadError) throw loadError;
       setItems(data ?? []);
+    } catch (err) {
+      console.error('Scenario list load failed', err);
+      setItems([]);
+      setError(err instanceof Error ? err.message : 'Unable to load scenarios.');
+    } finally {
       setLoading(false);
-    });
+    }
   }, []);
 
+  useEffect(() => {
+    void loadScenarios();
+  }, [loadScenarios]);
+
   if (loading) return <LoadingState message="Loading scenarios..." />;
+  if (error) return <ErrorState message={error} retry={loadScenarios} />;
   if (!items.length) return <EmptyState title="No scenarios" description="Please check back later." />;
 
   return (
