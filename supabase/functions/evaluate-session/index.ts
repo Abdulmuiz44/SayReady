@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import { z } from "npm:zod@3.23.8";
+import { z } from "https://esm.sh/zod@3.23.8";
 
 import { getConfig } from "../_shared/config.ts";
 import { HttpError, handleCorsPreflight, jsonResponse, sanitizeErrorResponse } from "../_shared/errors.ts";
@@ -182,8 +182,6 @@ Deno.serve(async (req) => {
       : null;
     const isPremium = Boolean(activeSubCurrent.data ?? activeSubLegacy?.data);
 
-    const isPremium = Boolean(activeSub);
-
     const dayStart = new Date();
     dayStart.setUTCHours(0, 0, 0, 0);
     const dayEnd = new Date(dayStart);
@@ -263,7 +261,6 @@ Deno.serve(async (req) => {
           idempotency_key: idempotencyKey,
           transcription_confidence: evaluated.confidence,
           overall_score: evaluated.score,
-          raw_feedback: baseFeedback,
           raw_feedback: {
             score: evaluated.score,
             summary: evaluated.summary,
@@ -318,7 +315,7 @@ Deno.serve(async (req) => {
         evidence: item.quote ?? item.suggestion,
       }));
 
-      const feedbackCurrent = await supabase.from("feedback_items").insert(feedbackRowsCurrent);
+      const feedbackCurrent = await supabase.from("feedback_items").insert(feedbackRows);
       const feedbackLegacy = isMissingColumnError(feedbackCurrent.error)
         ? await supabase.from("feedback_items").insert(
           evaluated.feedback_items.map((item) => ({
@@ -380,11 +377,14 @@ Deno.serve(async (req) => {
     await Promise.all(updates);
     await writeFunctionLog("success");
 
-    trackServerEvent("session_evaluated", {
-      user_id: user.id,
-      session_id: session.id,
-      attempt_number: payload.attempt_number,
-      score: evaluated.score,
+    trackServerEvent({
+      distinctId: user.id,
+      event: "session_evaluated",
+      properties: {
+        session_id: session.id,
+        attempt_number: payload.attempt_number,
+        score: evaluated.score,
+      },
     }).catch(() => undefined);
 
     return jsonResponse({
@@ -392,7 +392,6 @@ Deno.serve(async (req) => {
       evaluation: evaluated,
       session_id: session.id,
       score: evaluated.score,
-      feedback: baseFeedback,
       feedback: {
         score: evaluated.score,
         summary: evaluated.summary,
