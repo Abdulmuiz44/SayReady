@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { AppShell, Card, InputField, PrimaryButton, ScreenHeader } from '@/components';
 import { useAuth } from '@/providers/AuthProvider';
 import { upsertOnboarding } from '@/services/profiles';
+import { trackError, trackEvent } from '@/services/telemetry';
 
 export default function OnboardingProfile() {
   const { user, setProfile, reloadProfile } = useAuth();
@@ -17,6 +18,7 @@ export default function OnboardingProfile() {
 
     setSubmitting(true);
     setError(null);
+    void trackEvent({ eventName: 'onboarding_profile_submit' });
 
     try {
       const parsedGoals = goals ? JSON.parse(goals) : [];
@@ -41,8 +43,10 @@ export default function OnboardingProfile() {
 
       setProfile(nextProfile);
       await reloadProfile();
+      void trackEvent({ eventName: 'onboarding_completed' });
       router.replace('/(app)/home');
     } catch (err) {
+      void trackError('onboarding_profile_failed', err, { level, goals_count: Array.isArray(goals) ? goals.length : undefined });
       setError(err instanceof Error ? err.message : String(err ?? 'Unable to finish onboarding.'));
     } finally {
       setSubmitting(false);

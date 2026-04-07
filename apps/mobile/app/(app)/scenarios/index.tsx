@@ -3,6 +3,7 @@ import { Link } from 'expo-router';
 import { Text, View } from 'react-native';
 import { AppShell, Card, EmptyState, ErrorState, LoadingState, ScreenHeader } from '@/components';
 import { listScenarios } from '@/services/scenarios';
+import { trackError, trackEvent } from '@/services/telemetry';
 import type { Scenario } from '@/types';
 
 export default function ScenariosScreen() {
@@ -18,8 +19,10 @@ export default function ScenariosScreen() {
       const { data, error: loadError } = await listScenarios();
       if (loadError) throw loadError;
       setItems(data ?? []);
+      void trackEvent({ eventName: 'scenarios_loaded', metadata: { count: (data ?? []).length } });
     } catch (err) {
       console.error('Scenario list load failed', err);
+      void trackError('scenarios_load_failed', err);
       setItems([]);
       setError(err instanceof Error ? err.message : 'Unable to load scenarios.');
     } finally {

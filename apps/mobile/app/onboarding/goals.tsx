@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppShell, Card, PrimaryButton, ScreenHeader } from '@/components';
+import { trackEvent } from '@/services/telemetry';
 
 const options = ['Job interviews', 'Daily conversations', 'Presentations'];
 
@@ -41,7 +42,13 @@ export default function OnboardingGoals() {
         </View>
       </Card>
 
-      <PrimaryButton title="Continue" onPress={() => router.push({ pathname: '/onboarding/level', params: { goals: JSON.stringify(goals) } })} />
+      <PrimaryButton
+        title="Continue"
+        onPress={() => {
+          void trackEvent({ eventName: 'onboarding_goals_continue', metadata: { goals } });
+          router.push({ pathname: '/onboarding/level', params: { goals: JSON.stringify(goals) } });
+        }}
+      />
     </AppShell>
   );
 }

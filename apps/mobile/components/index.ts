@@ -10,3 +10,4 @@ export * from './SessionFeedbackCard';
 export * from './MistakeList';
 export * from './ProgressChart';
 export * from './PaywallCard';
+export * from './TelemetryBoundary';

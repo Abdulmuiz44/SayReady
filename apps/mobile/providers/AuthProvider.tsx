@@ -2,6 +2,7 @@ import { PropsWithChildren, createContext, useContext, useEffect, useMemo, useSt
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { fetchProfile } from '@/services/profiles';
+import { trackError, trackEvent } from '@/services/telemetry';
 import type { Profile } from '@/types';
 
 type AuthContextValue = {
@@ -30,8 +31,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     try {
       const { data } = await fetchProfile(user.id);
       setProfile(data ?? null);
-    } catch {
+    } catch (error) {
       setProfile(null);
+      void trackError('profile_reload_failed', error, { user_id: user.id });
     }
   };
 
@@ -44,11 +46,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!active) return;
         setSession(data.session);
         setUser(data.session?.user ?? null);
+        void trackEvent({ eventName: 'auth_bootstrap', metadata: { has_session: Boolean(data.session) } });
       })
-      .catch(() => {
+      .catch((error) => {
         if (!active) return;
         setSession(null);
         setUser(null);
+        void trackError('auth_bootstrap_failed', error);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -57,6 +61,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
+      void trackEvent({
+        eventName: 'auth_state_change',
+        metadata: { has_session: Boolean(nextSession), event: _event },
+      });
     });
 
     return () => {
@@ -66,7 +74,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
-    reloadProfile();
+    void reloadProfile();
   }, [user?.id]);
 
   const value = useMemo(

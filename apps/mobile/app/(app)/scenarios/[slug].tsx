@@ -5,6 +5,7 @@ import { AppShell, Card, ErrorState, LoadingState, PrimaryButton, ScreenHeader }
 import { getScenario } from '@/services/scenarios';
 import { createSession } from '@/services/sessions';
 import { useAuth } from '@/providers/AuthProvider';
+import { trackError, trackEvent } from '@/services/telemetry';
 import type { Scenario } from '@/types';
 
 export default function ScenarioDetailScreen() {
@@ -25,8 +26,10 @@ export default function ScenarioDetailScreen() {
       const { data, error: loadError } = await getScenario(slug);
       if (loadError) throw loadError;
       setScenario(data);
+      void trackEvent({ eventName: 'scenario_viewed', metadata: { slug } });
     } catch (err) {
       console.error('Scenario load failed', err);
+      void trackError('scenario_load_failed', err, { slug });
       setScenario(null);
       setError(err instanceof Error ? err.message : 'Unable to load scenario.');
     } finally {
@@ -43,13 +46,16 @@ export default function ScenarioDetailScreen() {
 
     setStarting(true);
     setError('');
+    void trackEvent({ eventName: 'session_start_clicked', metadata: { scenario_id: scenario.id, slug: scenario.slug } });
 
     try {
       const { data, error: createError } = await createSession(user.id, scenario.id);
       if (createError) throw createError;
+      void trackEvent({ eventName: 'session_started', metadata: { scenario_id: scenario.id, session_id: data.id } });
       router.push(`/(app)/session/${data.id}`);
     } catch (err) {
       console.error('Session creation failed', err);
+      void trackError('session_start_failed', err, { scenario_id: scenario?.id, slug });
       setError(err instanceof Error ? err.message : 'Unable to start session.');
     } finally {
       setStarting(false);

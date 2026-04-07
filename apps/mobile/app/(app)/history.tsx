@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { AppShell, Card, EmptyState, ErrorState, LoadingState, ScreenHeader } from '@/components';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
+import { trackError, trackEvent } from '@/services/telemetry';
 
 type HistoryItem = {
   id: string;
@@ -35,8 +36,10 @@ export default function HistoryScreen() {
 
       if (loadError) throw loadError;
       setSessions((data as HistoryItem[]) ?? []);
+      void trackEvent({ eventName: 'history_loaded', metadata: { count: (data ?? []).length } });
     } catch (err) {
       console.error('History load failed', err);
+      void trackError('history_load_failed', err, { user_id: user.id });
       setSessions([]);
       setError(err instanceof Error ? err.message : 'Unable to load history.');
     } finally {
