@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppShell, Card, InputField, PrimaryButton, ScreenHeader } from '@/components';
+import { getAuthErrorMessage } from '@/services/auth-errors';
 import { signUp } from '@/services/auth';
+import { trackError, trackEvent } from '@/services/telemetry';
 
 export default function SignUpScreen() {
   const [email, setEmail] = useState('');
@@ -16,11 +18,13 @@ export default function SignUpScreen() {
     const normalizedEmail = email.trim().toLowerCase();
     setLoading(true);
     setMessage('');
+    void trackEvent({ eventName: 'sign_up_submitted' });
 
     try {
       const { data, error: signUpError } = await signUp(normalizedEmail, password);
 
       if (signUpError) {
+        void trackError('sign_up_failed', signUpError, { email_domain: normalizedEmail.split('@')[1] ?? null });
         const text = signUpError.message.toLowerCase();
         if (text.includes('rate limit')) {
           setMessage('Too many attempts. Wait a moment and try again, or sign in if the account already exists.');
@@ -32,11 +36,16 @@ export default function SignUpScreen() {
       }
 
       if (data.session) {
+        void trackEvent({ eventName: 'sign_up_success', metadata: { has_session: true } });
         router.replace('/onboarding');
         return;
       }
 
+      void trackEvent({ eventName: 'sign_up_needs_confirmation' });
       setMessage('Account created, but email confirmation is still enabled in Supabase. Turn off email confirmation in the Supabase Auth settings if you want instant login, then sign up again.');
+    } catch (err) {
+      void trackError('sign_up_failed', err, { email_domain: normalizedEmail.split('@')[1] ?? null });
+      setMessage(getAuthErrorMessage(err, 'sign up'));
     } finally {
       setLoading(false);
     }

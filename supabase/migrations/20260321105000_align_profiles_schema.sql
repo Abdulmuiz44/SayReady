@@ -1,4 +1,4 @@
-﻿-- Align public.profiles with the mobile onboarding flow.
+-- Align public.profiles with the mobile onboarding flow.
 
 alter table public.profiles rename column user_id to id;
 alter table public.profiles rename column display_name to full_name;
