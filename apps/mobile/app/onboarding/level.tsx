@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppShell, Card, ScreenHeader } from '@/components';
+import { trackEvent } from '@/services/telemetry';
 
 const levels = [
   { key: 'beginner', label: 'Beginner', helper: 'Starting from the basics' },
@@ -16,7 +17,7 @@ export default function OnboardingLevel() {
         <View style={styles.stepPill}>
           <Text style={styles.stepText}>Step 3 of 3</Text>
         </View>
-        <ScreenHeader title="What’s your level?" subtitle="Pick the starting point that matches where you are today." />
+        <ScreenHeader title="What&apos;s your level?" subtitle="Pick the starting point that matches where you are today." />
       </View>
 
       <Card>
@@ -24,7 +25,10 @@ export default function OnboardingLevel() {
           {levels.map((item) => (
             <Pressable
               key={item.key}
-              onPress={() => router.push({ pathname: '/onboarding/profile', params: { goals, level: item.key } })}
+              onPress={() => {
+                void trackEvent({ eventName: 'onboarding_level_selected', metadata: { level: item.key } });
+                router.push({ pathname: '/onboarding/profile', params: { goals, level: item.key } });
+              }}
               style={({ pressed }) => [styles.option, pressed && styles.optionPressed]}
             >
               <Text style={styles.optionTitle}>{item.label}</Text>

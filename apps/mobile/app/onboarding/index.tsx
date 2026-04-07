@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { AppShell, Card, PrimaryButton, ScreenHeader } from '@/components';
+import { trackEvent } from '@/services/telemetry';
 
 export default function OnboardingIntro() {
   return (
@@ -22,7 +23,13 @@ export default function OnboardingIntro() {
         ))}
       </Card>
 
-      <PrimaryButton title="Start setup" onPress={() => router.push('/onboarding/goals')} />
+      <PrimaryButton
+        title="Start setup"
+        onPress={() => {
+          void trackEvent({ eventName: 'onboarding_intro_continue' });
+          router.push('/onboarding/goals');
+        }}
+      />
     </AppShell>
   );
 }
